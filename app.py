@@ -69,29 +69,93 @@ def summarize_article(text):
     return " ".join(summaries)
 
 
-st.set_page_config(page_title="AI Article Summarizer", layout="centered")
-st.title("📰 AI Article Summarizer")
+st.set_page_config(
+    page_title="AI Article Summarizer",
+    page_icon="📰",
+    layout="centered"
+)
 
-url = st.text_input("Enter article URL (CNN / news site)")
+st.markdown("""
+<style>
+.stApp {
+    background-color: #f8fafc;
+}
 
-if st.button("Summarize"):
-    if not url:
-        st.warning("Masukkan URL dulu")
-    else:
-        with st.spinner("Scraping & summarizing..."):
-            try:
-                title, article = scrape_article(url)
+.card {
+    background: #ffffff;
+    padding: 32px;
+    border-radius: 18px;
+    box-shadow: 0 20px 40px rgba(15,23,42,.08);
+    max-width: 700px;
+    margin: auto;
+}
 
-                if len(article) < 100:
-                    st.error("Cannot summarize articles with less than 100 words.")
-                else:
-                    summary = summarize_article(article)
+.title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 6px;
+}
 
-                    st.subheader("Article Title")
-                    st.write(title)
+.subtitle {
+    color: #64748b;
+    margin-bottom: 26px;
+    font-size: 15px;
+}
 
-                    st.subheader("Summary")
-                    st.write(summary)
+.summary-box {
+    background: #f1f5f9;
+    border-left: 5px solid #6366f1;
+    padding: 18px;
+    border-radius: 12px;
+    color: #0f172a;
+    line-height: 1.65;
+}
 
-            except Exception as e:
-                st.error(f"Error: {e}")
+input {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border-radius: 10px !important;
+    border: 1px solid #cbd5f5 !important;
+}
+
+button[kind="primary"] {
+    background: linear-gradient(90deg,#6366f1,#4f46e5) !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+with st.container():
+
+    st.markdown('<div class="title">📰 AI Article Summarizer</div>', unsafe_allow_html=True)
+
+    url = st.text_input("🔗 Enter article URL (CNN news site)")
+
+    if st.button("Summarize"):
+        if not url:
+            st.warning("Enter article URL")
+        else:
+            with st.spinner("🔍 Scraping & summarizing..."):
+                try:
+                    title, article = scrape_article(url)
+
+                    if len(article) < 100:
+                        st.error("Cannot summarize articles with less than 100 words.")
+                    else:
+                        summary = summarize_article(article)
+
+                        st.subheader("Article Title")
+                        st.write(title)
+
+                        st.subheader("Summary")
+                        st.markdown(
+                            f'<div class="summary-box">{summary}</div>',
+                            unsafe_allow_html=True
+                        )
+
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    
+    st.markdown('</div>', unsafe_allow_html=True)
