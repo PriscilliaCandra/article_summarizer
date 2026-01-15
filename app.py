@@ -1,79 +1,97 @@
 import requests
-from bs4 import BeautifulSoup
 import streamlit as st
-from transformers import pipeline, AutoTokenizer
+from bs4 import BeautifulSoup
+from huggingface_hub import InferenceClient
+import os
+from dotenv import load_dotenv
 
-model_name = "facebook/bart-large-cnn"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-summarizer = pipeline("summarization", model=model_name, tokenizer=tokenizer)
+load_dotenv()
 
-def scrape_cnn_article(url):
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
+HF_TOKEN = os.getenv("HF_TOKEN")
+MODEL = "facebook/bart-large-cnn"
+
+API_URL = f"https://router.huggingface.co/hf-inference/models/{MODEL}"
+
+HEADERS = {
+    "Authorization": f"Bearer {HF_TOKEN}",
+    "Content-Type": "application/json"
+}
+
+def scrape_article(url):
+    res = requests.get(url, timeout=10)
+    soup = BeautifulSoup(res.text, "html.parser")
+
     title = soup.find("h1")
-    title = title.get_text() if title else "Judul tidak ditemukan"
+    title = title.get_text(strip=True) if title else "No title"
 
-    paragraphs = soup.find_all('p')
+    paragraphs = soup.find_all("p")
+    text = " ".join(p.get_text() for p in paragraphs)
 
-    article_text = ''
-    for p in paragraphs:
-        article_text += p.get_text() + ' '
+    return title, text
 
-    return title, article_text.strip()
 
-def chunk_text_by_tokens(text, max_tokens=900):
-    tokens = tokenizer.encode(text)
-    
+def chunk_text(text, max_words=500):
+    words = text.split()
     chunks = []
-    for i in range(0, len(tokens), max_tokens):
-        chunk_tokens = tokens[i:i + max_tokens]
-        chunk_text = tokenizer.decode(chunk_tokens, skip_special_tokens=True)
-        chunks.append(chunk_text)
-        
+
+    for i in range(0, len(words), max_words):
+        chunks.append(" ".join(words[i:i + max_words]))
+
     return chunks
 
-def summarize(text, max_chunk=800):
-    chunks = chunk_text_by_tokens(text)
 
+def summarize_article(text):
+    chunks = chunk_text(text)
     summaries = []
-    
-    words = text.split()
-    
+
     for chunk in chunks:
-        summary = summarizer(
-            chunk,
-            max_length=120,
-            min_length=60,
-            do_sample=False
+        payload = {
+            "inputs": chunk,
+            "parameters": {
+                "max_length": 130,
+                "min_length": 60,
+                "do_sample": False
+            }
+        }
+
+        response = requests.post(
+            API_URL,
+            headers=HEADERS,
+            json=payload,
+            timeout=60
         )
-        
-        summaries.append(summary[0]['summary_text'])
-        
-    return ' '.join(summaries)
 
-st.set_page_config(page_title="Article Summarizer", layout="centered")
-st.title("Article Summarizer")
+        if response.status_code != 200:
+            raise Exception(response.text)
 
-url = st.text_input("URL CNN Article", "")
+        summaries.append(response.json()[0]["summary_text"])
+
+    return " ".join(summaries)
+
+
+st.set_page_config(page_title="AI Article Summarizer", layout="centered")
+st.title("📰 AI Article Summarizer")
+
+url = st.text_input("Enter article URL (CNN / news site)")
 
 if st.button("Summarize"):
-    if url:
-        with st.spinner("Scraping and summarizing the article..."):
+    if not url:
+        st.warning("Masukkan URL dulu")
+    else:
+        with st.spinner("Scraping & summarizing..."):
             try:
-                title, date, article_text = scrape_cnn_article(url)
-                
-                if not article_text:
-                    st.error("Could not extract article text. Please check the URL.")
+                title, article = scrape_article(url)
+
+                if len(article) < 100:
+                    st.error("Cannot summarize articles with less than 100 words.")
                 else:
-                    summary = summarize(article_text)
-                    
+                    summary = summarize_article(article)
+
                     st.subheader("Article Title")
                     st.write(title)
 
                     st.subheader("Summary")
                     st.write(summary)
+
             except Exception as e:
-                st.error(f"An error occurred: {e}")
-    else:
-        st.error("Please enter a valid URL.")
+                st.error(f"Error: {e}")
